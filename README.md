@@ -1,2 +1,10 @@
 # users-project
-search list of users
+ Search list of users
+
+ npm install
+ 
+ 
+ npm start
+ 
+ 
+ /api/users/:id (replace :id with username)
