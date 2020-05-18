@@ -5,6 +5,5 @@
  
  
  npm start
- 
- 
- /api/users/:id (replace :id with username)
+
+ /api/users/:username
