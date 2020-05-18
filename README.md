@@ -6,4 +6,4 @@
  
  npm start
 
- /api/users/:username
+ /api/v1/users
