@@ -1,121 +1,133 @@
-const express = require('express')
-const fs = require('fs');
+const express = require('express');
+const mongodb = require('mongodb');
 
-const app = express()
+const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json())
+//MongoDB
+const MongoClient = mongodb.MongoClient;
 
-const users = JSON.parse(fs.readFileSync(`${__dirname}/api/users.json`))
+const connectionURL = `mongodb://127.0.0.1:27017`;
+const databaseName = 'users-database';
 
-//GET users
-app.get('/api/v1/users',(req,res)=>{
-  res.status(200).json({
-      success:200,
-      results:users.length,
-      data:{
-          users:users
-      }
-  })
-})
+MongoClient.connect(
+	connectionURL,
+	{
+		useNewUrlParser: true,
+		useUnifiedTopology: true
+	},
+	(error, client) => {
+		if (error) {
+			return console.log(`unable to connect to the server`);
+		}
+		const db = client.db(databaseName);
+		const usersCollection = db.collection('users');
 
-//GET single user
-app.get('/api/v1/users/:username',(req,res)=>{
+		// Express server
+		app.use(express.json());
 
-  const findUser = users.find((user)=>{
-      return user.username.toLowerCase() === String(req.params.username.toLowerCase())
-  })
-  if(!findUser){
-      return res.status(404).json({
-          status:"fail",
-          message:"Invalid Username"
-      })
-  } 
-      
-      res.status(200).json({
-          success:200,
-          data:{
-              user:findUser
-          }
-          
-      })
-})
+		//GET 
+		app.get('/api/v1/users', (req, res) => {
+            usersCollection.find().toArray((error,result)=>{
+                if(error){
+                    return console.log(error);
+                }
+                res.status(200).json({
+                    success: 200,
+                    results: result.length,
+                    data: {
+                        user: result
+                    }
+                });
+            })
+		});
 
-//POST
-app.post('/api/v1/users',(req,res)=>{
-  const newid = users[users.length - 1].id + 1
-  
-  const newUser = Object.assign({
-      id:newid,
-  },req.body)
-  users.push(newUser)
- fs.writeFile(`${__dirname}/api/users.json`,JSON.stringify(users),(err)=>{
-     res.status(201).json({
-         status:"success",
-         data:{
-             user:newUser
-         }
-     })
- })
-})
+		//GET single user
+		app.get('/api/v1/users/:username', (req, res) => {
+            usersCollection.findOne({username:req.params.username.toLowerCase()},(error,result)=>{
+                if(error){
+                    return console.log(error);
+                }
+                res.status(200).json({
+                    success: 200,
+                    data: {
+                        user: result
+                    }
+                });
+            })
+		});
 
-//Update Post
-app.patch('/api/v1/users/:username',(req,res)=>{
-  let updateUser = users.find((user)=>{
-      return user.username.toLowerCase() === String(req.params.username.toLowerCase())
-  })
+		//POST
+		app.post('/api/v1/users', (req, res) => {
 
-  if(!updateUser){
-      return res.status(404).json({
-          status:"fail",
-          message:"Invalid Username"
-      })
-  }
-  updateUser = {
-      id:updateUser.id,
-      name:req.body.name,
-      username:req.body.username,
-      email:req.body.email
-      
-  }
+            if(!req.body.name && req.body.username && req.body.email){
+                    return res.status(404).json({
+                        message:"Invalid Data"
+                    })
+            }
+            
+			usersCollection.insertOne({
+                name:req.body.name,
+                username:req.body.username,
+                email:req.body.email
+            },(error,result)=>{
+                if(error){
+                    return console.log(error);
+                }
+                res.status(201).json({
+					status: 'success',
+					data: {
+						user: result.ops
+					}
+				});
+            })
+		});
 
-  users.splice(parseInt(updateUser.id - 1),1,updateUser)
-  fs.writeFile(`${__dirname}/api/users.json`,JSON.stringify(users),(err)=>{
-      res.status(201).json({
-          status:"success",
-          data:{
-              user:updateUser
-          }
-      })
-  })
-  
-})
+		//UPDATE 
+		app.patch('/api/v1/users/:username', (req, res) => {
 
-//Delete user
+            usersCollection.findOneAndUpdate({username:req.params.username.toLowerCase()},
+            {
+                $set:{
+                    name:req.body.name,
+                    username:req.body.username,
+                    email:req.body.email
+                }
+            },(error,result)=>{
+                if(error){
+                    return console.log(error);
+                }
+                res.status(201).json({
+					status: 'success',
+					data: {
+						user: `Updated ${result.ok} user`
+					}
+				});
+            })
+		});
 
-app.delete('/api/v1/users/:username',(req,res)=>{
-  let deleteUser = users.find((user)=>{
-      return user.username.toLowerCase() === String(req.params.username.toLowerCase())
-  })
+		//DELETE
 
-  if(!deleteUser){
-      return res.status(404).json({
-          status:"fail",
-          message:"Invalid Username"
-      })
-  }
+		app.delete('/api/v1/users/:username', (req, res) => {
+            usersCollection.deleteOne({username:req.params.username.toLowerCase()},(error,result)=>{
+            
+                if(error){
+                    return console.log(error);
+                }
+                    res.status(201).json({
+                        status: 'success',
+                        data: {
+                            user: `Deleted ${result.deletedCount} user(s)`
+                        }
+                    });
 
-  users.splice(parseInt(deleteUser.id - 1),1)
-  fs.writeFile(`${__dirname}/api/users.json`,JSON.stringify(users),(err)=>{
-      res.status(204).json({
-          status:"success",
-          data:null
-      })
-  })
-  res.send("User deleted successfully")
-})
+                
+            })
+		});
+	}
+);
 
 //npm start
-app.listen(PORT,()=>{
-    console.log(`Server running at http://localhost:${PORT}`);
-})
+app.listen(PORT, () => {
+	console.log(`Server running at http://localhost:${PORT}`);
+});
